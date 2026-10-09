@@ -1,28 +1,54 @@
-# Swedish Speak Coach v28 — rigorous A1–B2 grammar
+# Swedish Speak Coach v30 — Qwen3 model-only grammar correction
 
-v28 keeps the working Swedish CPT 135M Q8 model and eight-part Android packaging, but makes correction stricter.
+v30 replaces the accumulated Swedish grammar-rule validator with a stronger local language model.
 
-Key changes:
-- always runs two independent completion passes;
-- rejects meta/chat answers such as “fix it”;
-- validates candidates against A1–B2 Swedish grammar checks;
-- fixes number + noun form (`två bil` → `två bilar`, `2 barnen` → `2 barn`);
-- fixes article/adjective agreement;
-- fixes possessive/indefinite agreement;
-- fixes modal/`att` + infinitive;
-- fixes common `har/hade + wrong verb form` errors;
-- distinguishes main-clause and subordinate-clause negation;
-- fixes basic direct and indirect question word order;
-- checks V2, `sedan + starting point`, and strong future/tense conflicts;
-- accepts model-only corrections when they are conservative and valid instead of always preferring the unchanged sentence.
+## Architecture
 
-The grammar profile uses Rivstart A1/A2 + B1/B2 as a coverage target without reproducing textbook content.
+Speech recognition remains unchanged: Android SpeechRecognizer uses Swedish as the primary language and requests Swedish/English language switching where Android supports it.
 
-## v29 Kotlin build fix
+The correction path is now:
 
-v29 keeps the v28 rigorous grammar/model pipeline unchanged and fixes two malformed Kotlin source files that prevented compilation:
+1. Preserve the original mixed Swedish/English transcript.
+2. Send it directly to **Qwen3 0.6B Q4_0** on-device.
+3. Ask the model to silently inspect grammar and context and output only one corrected Swedish sentence.
+4. Apply a tiny output-format guard only. It does **not** contain Swedish grammar rules.
+5. If the model violates the one-sentence output contract, retry once with a stricter format prompt.
 
-- `CoachEngine.kt`: valid `suspend (WordSuggestion) -> Unit` callback signature and fully reformatted source.
-- `MainActivity.kt`: UI helpers moved to normal class methods and the compressed one-line function body removed.
+ML Kit English -> Swedish translation remains only for fast word hints shown while speaking. Its literal word translations are no longer substituted into the sentence before grammar correction.
 
-A standalone Kotlin parser pass reports no syntax/parser errors. Android dependency references are resolved by the normal Gradle build.
+## Model
+
+- Repository: `ggml-org/Qwen3-0.6B-GGUF`
+- File: `Qwen3-0.6B-Q4_0.gguf`
+- Quantization: Q4_0
+- Approximate model size: 429 MB
+- License: Apache-2.0
+- SHA-256 checked by the build script: `da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4`
+
+The existing `dev.ffmpegkit-maintained:llama-android:0.1.1` wrapper is retained. Its documented llama.cpp build is new enough for Qwen3, so v30 avoids an unnecessary JNI/runtime migration.
+
+## Qwen3 thinking mode
+
+The prompt ends with `/no_think`. The model output guard also strips any `<think>...</think>` block if the runtime still emits an empty or unexpected thinking wrapper.
+
+## Packaging
+
+GitHub Actions downloads the official GGUF and splits it into exactly 16 `res/raw` chunks. `BundledModelParts.kt` contains direct compile-time `R.raw` references to every chunk, so a build cannot succeed if a part is missing.
+
+The final APK is large because the ~429 MB model is bundled. On first launch, the chunks are reconstructed into app-private storage for llama.cpp.
+
+## Build artifact
+
+`SwedishSpeakCoach-v30-debug-apk`
+
+## Manual acceptance tests after install
+
+These are behavior tests for the model prompt, not hard-coded rules in the app:
+
+- `jag har en barnen` should become `Jag har ett barn.`
+- `jag kommer from japanska` should become `Jag kommer från Japan.`
+- `jag kan pratar svenska` should become `Jag kan prata svenska.`
+- `idag jag jobbar hemma` should become `Idag jobbar jag hemma.`
+- already-correct Swedish should remain semantically unchanged.
+
+If Qwen3 returns commentary instead of one sentence, the app rejects that output and retries once. It does not apply a hand-written Swedish grammar repair afterward.

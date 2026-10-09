@@ -169,9 +169,9 @@ class MainActivity : AppCompatActivity() {
     private suspend fun processSentence(sentence: String) {
         append(original, sentence)
         setStatus("Checking English words…")
-        val suggestions = coach.findEnglishSuggestions(sentence) { showSuggestion(it) }
-        setStatus("Rigorous A1–B2 grammar check…")
-        val result = coach.correctSentence(sentence, suggestions)
+        coach.findEnglishSuggestions(sentence) { showSuggestion(it) }
+        setStatus("Correcting with Qwen3 0.6B…")
+        val result = coach.correctSentence(sentence)
         grammarInfo.text = "Grammar: ${result.engine}"
         append(corrected, result.naturalSwedish)
         if (listening) setStatus("Listening — ready for next sentence")
@@ -250,7 +250,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(recognizerInfo)
 
         grammarInfo = TextView(this).apply {
-            text = "Grammar: rigorous A1–B2 profile"
+            text = "Grammar: Qwen3 0.6B local corrector"
             textSize = 12f
         }
         root.addView(grammarInfo)
@@ -299,7 +299,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         root.addView(TextView(this).apply {
-            text = "Grammar uses a Swedish CPT model plus a strict A1–B2 validator. Meta answers are rejected and two model passes are cross-checked."
+            text = "Grammar is corrected by a local Qwen3 0.6B model. English words stay in the original sentence so the model can translate them using context. Only output-format checks are applied; there is no rule-based grammar patcher."
             textSize = 12f
             setPadding(0, dp(12), 0, dp(8))
         })

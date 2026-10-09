@@ -8,8 +8,8 @@ android {
         applicationId = "se.example.swedishcoach"
         minSdk = 24
         targetSdk = 35
-        versionCode = 29
-        versionName = "2.9.0-kotlin-buildfix"
+        versionCode = 30
+        versionName = "3.0.0-qwen3-model-corrector"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
@@ -24,6 +24,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    androidResources {
+        noCompress += "bin"
+    }
 }
 
 dependencies {
@@ -36,11 +40,11 @@ dependencies {
     implementation("dev.ffmpegkit-maintained:llama-android:0.1.1")
 }
 
-val prepareSwedishModel = tasks.register<Exec>("prepareSwedishModel") {
+val prepareGrammarModel = tasks.register<Exec>("prepareGrammarModel") {
     workingDir(rootProject.projectDir)
-    commandLine("bash", "scripts/prepare_swedish_model.sh")
+    commandLine("bash", "scripts/prepare_qwen_model.sh")
 }
 
 tasks.named("preBuild").configure {
-    dependsOn(prepareSwedishModel)
+    dependsOn(prepareGrammarModel)
 }

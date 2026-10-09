@@ -39,7 +39,7 @@ class CoachEngine(context: Context) : AutoCloseable {
     val grammarEngineDescription: String
         get() = grammar.description
 
-    private val guard = setOf(
+    private val commonSwedishWords = setOf(
         "jag", "du", "han", "hon", "vi", "ni", "de", "den", "det",
         "är", "var", "har", "hade", "vill", "kan", "ska", "skulle",
         "måste", "och", "eller", "men", "att", "som", "om", "för",
@@ -51,11 +51,17 @@ class CoachEngine(context: Context) : AutoCloseable {
 
     suspend fun prepare(onStatus: (String) -> Unit = {}) = withContext(Dispatchers.IO) {
         grammar.prepare(onStatus)
-        onStatus("Preparing English → Swedish vocabulary model…")
+        onStatus("Preparing English → Swedish word-help model…")
         runCatching { Tasks.await(enToSv.downloadModelIfNeeded()) }
         onStatus(grammar.description)
     }
 
+    /**
+     * Fast word-level hints remain available while speaking. They are display-only.
+     * The grammar LLM always receives the original mixed-language sentence so it
+     * can translate English words contextually rather than inheriting a literal
+     * word-for-word replacement.
+     */
     suspend fun findEnglishSuggestions(
         text: String,
         onSuggestion: suspend (WordSuggestion) -> Unit = {},
@@ -68,7 +74,7 @@ class CoachEngine(context: Context) : AutoCloseable {
 
         for (word in words) {
             val lower = word.lowercase()
-            if (lower.length < 3 || lower in guard || !seen.add(lower)) continue
+            if (lower.length < 3 || lower in commonSwedishWords || !seen.add(lower)) continue
 
             val languages = runCatching {
                 Tasks.await(languageId.identifyPossibleLanguages(word))
@@ -97,26 +103,13 @@ class CoachEngine(context: Context) : AutoCloseable {
         out
     }
 
-    suspend fun correctSentence(
-        original: String,
-        suggestions: List<WordSuggestion>,
-    ): Correction = withContext(Dispatchers.IO) {
-        var seeded = original
-        for (suggestion in suggestions) {
-            seeded = Regex(
-                "(?i)(?<![A-Za-zÅÄÖåäö])${Regex.escape(suggestion.original)}(?![A-Za-zÅÄÖåäö])"
-            ).replace(seeded, suggestion.swedish)
-        }
-
-        val result = grammar.correct(seeded)
-        val flags = buildList {
-            if (result.secondPass) add("2-pass")
-            if (result.modelEditUsed) add("model+validator") else add("strict validator")
-        }
+    suspend fun correctSentence(original: String): Correction = withContext(Dispatchers.IO) {
+        val result = grammar.correct(original)
+        val retry = if (result.retriedForFormat) " • format retry" else ""
 
         Correction(
             naturalSwedish = result.text,
-            engine = "Swedish CPT 135M • ${"%.1f".format(result.tokensPerSecond)} tok/s • ${flags.joinToString("+")}"
+            engine = "Qwen3 0.6B Q4_0 • ${"%.1f".format(result.tokensPerSecond)} tok/s$retry"
         )
     }
 
