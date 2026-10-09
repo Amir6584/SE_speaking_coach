@@ -1,0 +1,37 @@
+name: Build Android APK v29
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11'}
+      - uses: android-actions/setup-android@v4
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v6
+        with: {gradle-version: '9.6.0'}
+      - name: Build debug APK with Swedish model
+        run: gradle --no-daemon clean :app:assembleDebug --rerun-tasks
+      - name: Verify 8 Swedish model resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$APK" > apk-files.txt
+          for i in 000 001 002 003 004 005 006 007; do grep -q "res/raw/swedish_model_part_${i}\.bin" apk-files.txt; done
+          COUNT=$(grep -c 'res/raw/swedish_model_part_[0-9][0-9][0-9]\.bin' apk-files.txt)
+          BYTES=$(awk '/res\/raw\/swedish_model_part_[0-9][0-9][0-9]\.bin/ {s+=$1} END {print s+0}' apk-files.txt)
+          test "$COUNT" -eq 8
+          test "$BYTES" -gt 120000000
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SwedishSpeakCoach-v29-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
