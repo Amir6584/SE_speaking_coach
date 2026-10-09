@@ -8,8 +8,8 @@ android {
         applicationId = "se.example.swedishcoach"
         minSdk = 24
         targetSdk = 35
-        versionCode = 30
-        versionName = "3.0.0-qwen3-model-corrector"
+        versionCode = 31
+        versionName = "3.1.0-qwen3-workflow-fix"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 

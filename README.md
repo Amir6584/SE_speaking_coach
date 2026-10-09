@@ -1,6 +1,6 @@
-# Swedish Speak Coach v30 — Qwen3 model-only grammar correction
+# Swedish Speak Coach v31 — Qwen3 model-only grammar correction
 
-v30 replaces the accumulated Swedish grammar-rule validator with a stronger local language model.
+v31 replaces the accumulated Swedish grammar-rule validator with a stronger local language model.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ ML Kit English -> Swedish translation remains only for fast word hints shown whi
 - License: Apache-2.0
 - SHA-256 checked by the build script: `da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4`
 
-The existing `dev.ffmpegkit-maintained:llama-android:0.1.1` wrapper is retained. Its documented llama.cpp build is new enough for Qwen3, so v30 avoids an unnecessary JNI/runtime migration.
+The existing `dev.ffmpegkit-maintained:llama-android:0.1.1` wrapper is retained. Its documented llama.cpp build is new enough for Qwen3, so v31 avoids an unnecessary JNI/runtime migration.
 
 ## Qwen3 thinking mode
 
@@ -39,7 +39,7 @@ The final APK is large because the ~429 MB model is bundled. On first launch, th
 
 ## Build artifact
 
-`SwedishSpeakCoach-v30-debug-apk`
+`SwedishSpeakCoach-v31-debug-apk`
 
 ## Manual acceptance tests after install
 
