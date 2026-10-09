@@ -1,37 +1,91 @@
-name: Build Android APK v29
+name: Build Android APK v30
+
 on:
   push:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
-        with: {distribution: temurin, java-version: '17'}
-      - uses: actions/setup-python@v6
-        with: {python-version: '3.11'}
-      - uses: android-actions/setup-android@v4
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-      - uses: gradle/actions/setup-gradle@v6
-        with: {gradle-version: '9.6.0'}
-      - name: Build debug APK with Swedish model
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Cache Qwen3 GGUF download
+        uses: actions/cache@v4
+        with:
+          path: qwen-model
+          key: qwen3-0.6b-q4-0-da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4
+
+      # :app:preBuild depends on prepareGrammarModel, which downloads the official
+      # ggml-org Qwen3-0.6B Q4_0 GGUF, verifies its SHA-256, and splits it into
+      # 16 fixed Android raw resources before resource processing/compilation.
+      - name: Build debug APK with Qwen3 grammar model
         run: gradle --no-daemon clean :app:assembleDebug --rerun-tasks
-      - name: Verify 8 Swedish model resources
+
+      - name: Verify all 16 Qwen3 model resources in APK
         shell: bash
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
           unzip -l "$APK" > apk-files.txt
-          for i in 000 001 002 003 004 005 006 007; do grep -q "res/raw/swedish_model_part_${i}\.bin" apk-files.txt; done
-          COUNT=$(grep -c 'res/raw/swedish_model_part_[0-9][0-9][0-9]\.bin' apk-files.txt)
-          BYTES=$(awk '/res\/raw\/swedish_model_part_[0-9][0-9][0-9]\.bin/ {s+=$1} END {print s+0}' apk-files.txt)
-          test "$COUNT" -eq 8
-          test "$BYTES" -gt 120000000
-      - uses: actions/upload-artifact@v7
+
+          for i in $(seq -w 0 15); do
+            name="qwen_grammar_part_0${i}.bin"
+            echo "Checking $name"
+            grep -q "res/raw/$name" apk-files.txt
+          done
+
+          COUNT=$(grep -c 'res/raw/qwen_grammar_part_[0-9][0-9][0-9]\.bin' apk-files.txt)
+          BYTES=$(awk '/res\/raw\/qwen_grammar_part_[0-9][0-9][0-9]\.bin/ {s+=$1} END {print s+0}' apk-files.txt)
+          echo "APK Qwen3 model parts: $COUNT"
+          echo "APK Qwen3 model bytes: $BYTES"
+          test "$COUNT" -eq 16
+          test "$BYTES" -gt 400000000
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump resources "$APK" > apk-resources.txt
+          grep -q 'qwen_grammar_part_000' apk-resources.txt
+          grep -q 'qwen_grammar_part_015' apk-resources.txt
+
+          # Verify the exact official GGUF survived splitting + Android packaging.
+          EXPECTED_SHA256=da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4
+          APK_MODEL_SHA=$(
+            for i in $(seq -w 0 15); do
+              unzip -p "$APK" "res/raw/qwen_grammar_part_0${i}.bin"
+            done | sha256sum | awk '{print $1}'
+          )
+          echo "Reconstructed APK model SHA-256: $APK_MODEL_SHA"
+          test "$APK_MODEL_SHA" = "$EXPECTED_SHA256"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
         with:
-          name: SwedishSpeakCoach-v29-debug-apk
+          name: SwedishSpeakCoach-v30-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
